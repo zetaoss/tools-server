@@ -1,0 +1,22 @@
+/* main.css */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --border: theme('colors.neutral.300');
+  }
+
+  .dark {
+    color-scheme: dark;
+    --border: theme('colors.neutral.700');
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+}
