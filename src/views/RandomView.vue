@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import CopyButton from '@/components/CopyButton.vue'
 
 type PresetKey = 'uuid' | 'hex' | 'k8s' | 'alphanum' | 'custom'
 type CharsetKey = 'numbers' | 'a-f' | 'a-z' | 'A-Z' | 'dash' | 'symbols'
-
-const copiedIndex = ref<number | null>(null)
 
 const presets = [
   { key: 'uuid', label: 'UUID' },
@@ -118,14 +117,6 @@ function generate() {
   history.value = history.value.slice(0, 8)
 }
 
-function copyToClipboard(text: string, index: number) {
-  navigator.clipboard.writeText(text)
-  copiedIndex.value = index
-  setTimeout(() => {
-    if (copiedIndex.value === index) copiedIndex.value = null
-  }, 3000)
-}
-
 onMounted(() => {
   selectPreset(preset.value)
 })
@@ -172,14 +163,9 @@ onMounted(() => {
     <div class="space-y-2 pt-4">
       <div v-for="(item, idx) in history" :key="idx"
         class="flex items-center justify-between p-3 rounded font-mono break-all transition-all bg-gray-200 dark:bg-gray-800 border"
-        :class="[
-          idx === 0 ? '' : 'opacity-60',
-        ]">
+        :class="[idx === 0 ? '' : 'opacity-60']">
         <span class="mr-2 flex-1 break-words">{{ item }}</span>
-        <button @click="copyToClipboard(item, idx)"
-          class="text-sm px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition min-w-[80px] text-center">
-          {{ copiedIndex === idx ? '✔ Copied' : '📋 Copy' }}
-        </button>
+        <CopyButton :text="item" />
       </div>
     </div>
   </div>

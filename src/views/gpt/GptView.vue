@@ -5,13 +5,29 @@ import { useLocalStorage } from '@vueuse/core'
 import { useHistoryStore, type HistoryType } from '@/stores/history'
 import HistoryModal from './HistoryModal.vue'
 import ConfirmModal from './ConfirmModal.vue'
+import ModelDropdown from './ModelDropdown.vue'
 import BaseButton from '@/components/BaseButton.vue'
 import BaseIcon from '@/components/BaseIcon.vue'
+import CopyButton from '@/components/CopyButton.vue'
 import { mdiRobotOutline, mdiThermometer, mdiContentSaveOutline } from '@mdi/js'
 
 // ========== 상태 ==========
-const availableModels = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4o']
-const selectedModel = useLocalStorage('gpt-model', 'gpt-3.5-turbo')
+const modelOptions = [
+  { supportTemperature: true, value: 'gpt-4o', label: 'GPT‑4o', description: 'Great for most tasks' },
+  { supportTemperature: false, value: 'o3-mini', label: 'o3', description: 'Uses advanced reasoning' },
+  { supportTemperature: false, value: 'o4-mini', label: 'o4-mini', description: 'Fastest at advanced reasoning' },
+  { supportTemperature: false, value: 'o4-mini-2025-04-16', label: 'o4-mini-high', description: 'Great at coding and visual reasoning' },
+  { supportTemperature: true, value: 'gpt-4.5-preview', label: 'GPT‑4.5', description: 'Good for writing and exploring ideas' },
+  { supportTemperature: true, value: 'gpt-4.1', label: 'GPT‑4.1', description: 'Great for quick coding and analysis' },
+  { supportTemperature: true, value: 'gpt-4.1-mini', label: 'GPT‑4.1-mini', description: 'Faster for everyday tasks' },
+]
+const selectedModel = useLocalStorage('gpt-model', 'gpt-4o')
+
+// 현재 선택된 모델 옵션
+const currentOption = computed(() =>
+  modelOptions.find(opt => opt.value === selectedModel.value) || modelOptions[0]
+)
+
 const temperature = ref(0.7)
 const persist = useLocalStorage<boolean>('gpt-persist', false)
 const apiKey = ref('')
@@ -69,6 +85,16 @@ async function run() {
   result.value = ''
 
   const prompt = `${script.value}\n\n${formatDocuments()}`
+
+  const option = modelOptions.find(opt => opt.value === selectedModel.value)
+  const body: Record<string, unknown> = {
+    model: selectedModel.value,
+    messages: [{ role: 'user', content: prompt }],
+  }
+  if (option?.supportTemperature) {
+    body.temperature = temperature.value
+  }
+
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -76,11 +102,7 @@ async function run() {
         Authorization: `Bearer ${apiKey.value.trim()}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: selectedModel.value,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: temperature.value
-      }),
+      body: JSON.stringify(body),
     })
 
     const data = await res.json()
@@ -112,14 +134,6 @@ function applyHistory(val: string, type: HistoryType) {
 
 function deleteHistory(index: number, type: HistoryType) {
   historyStore.remove(type, index)
-}
-
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (e) {
-    console.error('복사 실패:', e)
-  }
 }
 
 // ========== 초기 로딩 ==========
@@ -157,10 +171,8 @@ onMounted(() => {
           <BaseButton :disabled="counts[type] === 0" @click="openHistory(type)">
             히스토리 ({{ counts[type] }})
           </BaseButton>
-          <BaseButton
-            @click="copy(type === 'key' ? apiKey : type === 'script' ? script : type === 'docs' ? formatDocuments() : result)">
-            복사
-          </BaseButton>
+          <CopyButton
+            :text="type === 'key' ? apiKey : type === 'script' ? script : type === 'docs' ? formatDocuments() : result" />
         </div>
       </div>
 
@@ -181,13 +193,14 @@ onMounted(() => {
           <label class="font-medium dark:text-white">문서 수:</label>
           <select v-model="documentCount"
             class="border rounded p-1 ml-2 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+            <option :value="0">0</option>
             <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
           </select>
         </div>
         <div v-for="(doc, index) in documents" :key="index" class="mb-2">
           <div class="flex justify-between items-center">
             <label class="dark:text-white">문서 {{ index + 1 }}</label>
-            <BaseButton @click="copy(doc)">복사</BaseButton>
+            <CopyButton :text="doc" />
           </div>
           <textarea v-model="documents[index]"
             class="border rounded w-full h-24 p-2 mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
@@ -205,24 +218,20 @@ onMounted(() => {
 
       <!-- 모델 선택 -->
       <div class="flex items-center gap-2">
-        <BaseIcon :path="mdiRobotOutline" class="w-5 h-5"/>
-        <select v-model="selectedModel"
-          class="border rounded p-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white w-full max-w-xs">
-          <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
-        </select>
+        <BaseIcon :path="mdiRobotOutline" class="w-5 h-5" />
+        <ModelDropdown :model="selectedModel" :options="modelOptions" :onSelect="(val) => selectedModel = val" />
       </div>
 
       <!-- Temperature 선택 -->
       <div class="flex items-center gap-2">
         <BaseIcon :path="mdiThermometer" class="w-5 h-5" />
-        <select id="temperature" v-model.number="temperature"
-          class="border rounded p-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+        <select id="temperature" v-model.number="temperature" :disabled="!currentOption.supportTemperature"
+          class="border rounded p-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-200 dark:disabled:bg-gray-700">
           <option v-for="n in 11" :key="n" :value="(n - 1) / 10">
             {{ ((n - 1) / 10).toFixed(1) }}
           </option>
         </select>
       </div>
-
       <!-- 로컬스토리지 저장 여부 -->
       <div class="flex items-center gap-2">
         <BaseIcon :path="mdiContentSaveOutline" class="w-5 h-5" />
@@ -239,7 +248,7 @@ onMounted(() => {
         <BaseButton :disabled="counts.result === 0" @click="openHistory('result')">
           히스토리 ({{ counts.result }})
         </BaseButton>
-        <BaseButton @click="copy(result)">복사</BaseButton>
+        <CopyButton :text="result" />
       </div>
     </div>
 
